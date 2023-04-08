@@ -87,3 +87,4 @@ composer require wpackagist-theme/<theme-name>
 ```
 
 You can find themes [here](https://wpackagist.org/).
+# WORDPRESS-BEDROCK
