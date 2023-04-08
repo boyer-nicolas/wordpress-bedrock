@@ -1,0 +1,122 @@
+{
+  "name": "niwee/wordpress",
+  "type": "project",
+  "license": "MIT",
+  "description": "WordPress boilerplate with modern development tools, easier configuration, and an improved folder structure",
+  "homepage": "https://agence.niwee.fr",
+  "authors": [
+    {
+      "name": "Nicolas Boyer",
+      "email": "nicolas@niwee.fr",
+      "homepage": "https://github.com/boyer-nicolas"
+    },
+    {
+      "name": "Scott Walkinshaw",
+      "email": "scott.walkinshaw@gmail.com",
+      "homepage": "https://github.com/swalkinshaw"
+    },
+    {
+      "name": "Ben Word",
+      "email": "ben@benword.com",
+      "homepage": "https://github.com/retlehs"
+    }
+  ],
+  "keywords": [
+    "bedrock",
+    "composer",
+    "roots",
+    "wordpress",
+    "wp",
+    "wp-config",
+    "docker",
+    "docker-compose"
+  ],
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://wpackagist.org",
+      "only": [
+        "wpackagist-plugin/*",
+        "wpackagist-theme/*"
+      ]
+    }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "composer/installers": "^2.2",
+    "vlucas/phpdotenv": "^5.5",
+    "oscarotero/env": "^2.1",
+    "roots/bedrock-autoloader": "^1.0",
+    "roots/bedrock-disallow-indexing": "^2.0",
+    "roots/wordpress": "6.2",
+    "roots/wp-config": "1.0.0",
+    "roots/wp-password-bcrypt": "1.1.0"
+  },
+  "require-dev": {
+    "squizlabs/php_codesniffer": "^3.7.1",
+    "roave/security-advisories": "dev-latest",
+    "pestphp/pest": "^1.22"
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "process-timeout": 0,
+    "preferred-install": "dist",
+    "allow-plugins": {
+      "composer/installers": true,
+      "roots/wordpress-core-installer": true,
+      "pestphp/pest-plugin": true
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "extra": {
+    "installer-paths": {
+      "web/app/mu-plugins/{$name}/": [
+        "type:wordpress-muplugin"
+      ],
+      "web/app/plugins/{$name}/": [
+        "type:wordpress-plugin"
+      ],
+      "web/app/themes/{$name}/": [
+        "type:wordpress-theme"
+      ]
+    },
+    "wordpress-install-dir": "web/wp"
+  },
+  "scripts": {
+    "test": [
+      "pest"
+    ],
+    "clean": "sudo rm -rf vendor/ composer.lock",
+    "gen:env": "bin/registry.sh && php bin/env.php",
+    "media:push": "bin/media.sh push",
+    "media:pull": "bin/media.sh pull",
+    "db:dump": "bin/db.sh dump",
+    "db:import": "bin/db.sh import",
+    "fix:url": "bin/fix-url.sh",
+    "make:template": "/bin/bash -c bin/template.sh",
+    "make:child": "/bin/bash -c 'docker compose exec -T wordpress bash' < bin/child.sh",
+    "prod:up": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d",
+    "prod:down": "docker compose -f docker-compose.yml -f docker-compose.prod.yml down",
+    "staging:up": "docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d",
+    "staging:down": "docker compose -f docker-compose.yml -f docker-compose.staging.yml down",
+    "post-autoload-dump": [
+      "Roots\\Acorn\\ComposerScripts::postAutoloadDump"
+    ]
+  },
+  "scripts-descriptions": {
+    "db:dump": "Export the database to sql/dump.sql",
+    "db:import": "Import to the database from sql/dump.sql",
+    "fix:url": "Sets the WP url to the one defined in the .env",
+    "gen:env": "Generates keys with random characters & asks for database data",
+    "make:child": "Generates child theme with webpack support",
+    "make:template": "Creates default users, default pages & fixes url structure/datetime",
+    "media:pull": "Pulls sql & uploads from the storage server",
+    "media:push": "Pushes sql & uploads to the storage server",
+    "prod:up": "Starts the production environment",
+    "prod:down": "Stops the production environment",
+    "staging:up": "Starts the staging environment",
+    "staging:down": "Stops the staging environment",
+    "test": "Run the tests via PestPHP"
+  }
+}

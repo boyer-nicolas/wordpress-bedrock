@@ -1,0 +1,200 @@
+#!/bin/bash
+set -e
+
+source /home/niwee/bin/ssh-config.sh
+
+# List all available backups
+AVAILABLE_BACKUPS=$(ssh -i $SSH_IDENTITY_FILE -p $SSH_PORT $SSH_USER@$SSH_HOST "ls -d $BASE_REMOTE_BACKUP_DIR/* | sort -r | head -n 500")
+
+# Ask user to select a backup
+log "Available backups:"
+echo "$AVAILABLE_BACKUPS"
+read -p "Select a backup to restore: " BACKUP_TO_RESTORE
+
+if [ -z "$BACKUP_TO_RESTORE" ]; then
+    fail "No backup selected. Exiting."
+    exit 1
+fi
+
+while [ $(ssh -i $SSH_IDENTITY_FILE -p $SSH_PORT $SSH_USER@$SSH_HOST "test -d $BACKUP_TO_RESTORE && echo 'true'" || echo "false") == "false" ]; do
+    fail "Invalid backup selected. Please try again."
+    read -p "Select a backup to restore: " BACKUP_TO_RESTORE
+done
+
+log "Selected backup: $BACKUP_TO_RESTORE"
+
+read -p "Are you sure you want to restore this backup? (y/n) " CONFIRM_RESTORE
+
+read -p "Take a backup of the current installation? (y/n) " TAKE_BACKUP
+
+if [ "$TAKE_BACKUP" == "y" ]; then
+    ./backup.sh
+fi
+
+if [ "$CONFIRM_RESTORE" != "y" ]; then
+    fail "Restore cancelled. Exiting."
+    exit 1
+fi
+
+read -p "Restore database? (y/n) " RESTORE_DB
+
+read -p "Restore files? (y/n) " RESTORE_FILES
+
+if [ "$RESTORE_DB" != "y" ] && [ "$RESTORE_FILES" != "y" ]; then
+    fail "Nothing to restore. Exiting."
+    exit 1
+fi
+
+$RESTORE_DIR="$BACKUP_DIR/$BACKUP_TO_RESTORE"
+
+if [ -d $RESTORE_DIR ]; then
+    info "Removing existing backup directory ..."
+    if rm -rf $RESTORE_DIR; then
+        success
+    else
+        fail
+        exit 1
+    fi
+fi
+
+# Create backup directory
+echo "Creating backup directory ..."
+if mkdir -p $RESTORE_DIR; then
+    success
+else
+    fail
+    exit 1
+fi
+
+if [ "$RESTORE_DB" == "y" ]; then
+
+    # If sql directory doesn't exist, create it
+    if [ ! -d "$RESTORE_DIR/sql" ]; then
+        mkdir -p $RESTORE_DIR/sql
+    fi
+
+    # Get the backup
+    await "Downloading database backup ..."
+    if scp -i $SSH_IDENTITY_FILE -P $SSH_PORT -r $SSH_USER@$SSH_HOST:$BACKUP_TO_RESTORE/sql.tar.gz $RESTORE_DIR/sql.tar.gz; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+    # Uncompress database
+    await "Uncompressing database backup ..."
+    if tar -xzf $RESTORE_DIR/sql.tar.gz -C $RESTORE_DIR/sql/; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+    # Remove compressed backup
+    await "Removing compressed database backup ..."
+    if rm $RESTORE_DIR/sql.tar.gz; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+    cd $WP_DIR
+
+    # Import database
+    await "Importing database ..."
+    if $WP_CLI db import $RESTORE_DIR/sql/dump.sql; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+    # Cleanup
+    await "Cleaning up ..."
+    if rm -rf $RESTORE_DIR/sql; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+fi
+
+if [ "$RESTORE_FILES" == "y" ]; then
+
+    # If sql directory doesn't exist, create it
+    if [ ! -d "$RESTORE_DIR/wp" ]; then
+        mkdir -p $RESTORE_DIR/wp
+    fi
+
+    # Get the backup
+    await "Downloading files backup ..."
+    if scp -i $SSH_IDENTITY_FILE -P $SSH_PORT -r $SSH_USER@$SSH_HOST:$BACKUP_TO_RESTORE/wp.tar.gz $RESTORE_DIR/wp.tar.gz; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+    # Uncompress backup
+    await "Uncompressing files backup ..."
+    if tar -xzf $RESTORE_DIR/wp.tar.gz -C $RESTORE_DIR/wp/; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+    # Remove compressed backup
+    await "Removing compressed files backup ..."
+    if rm $RESTORE_DIR/wp.tar.gz; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+    await "Restoring files ..."
+    rsync -avz --delete $RESTORE_DIR/wp/ $WP_CONTENT_DIR
+
+    # Cleanup
+    await "Cleaning up ..."
+    if rm -rf $RESTORE_DIR/wp; then
+        success
+    else
+        fail
+        exit 1
+    fi
+
+fi
+
+cd $APP_DIR
+
+if [ "$WP_ENV" = "development" ]; then
+    URL=$WP_DEV_URL
+elif [ "$WP_ENV" = "staging" ]; then
+    URL=$WP_STAGING_URL
+elif [ "$WP_ENV" = "production" ]; then
+    URL=$WP_PROD_URL
+fi
+
+# Change siteurl
+info "Changing siteurl ..."
+CURRENT_SITE_URL=$($WP_CLI option get siteurl)
+$WP_CLI search-replace --all-tables $CURRENT_SITE_URL $URL
+
+# Flush cache
+await "Flushing cache ..."
+$WP_CLI cache flush
+
+await "Final cleanup ..."
+if rm -rf $RESTORE_DIR; then
+    success
+else
+    fail
+    exit 1
+fi
+
+success "Restore complete."

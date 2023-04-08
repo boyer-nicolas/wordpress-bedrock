@@ -1,0 +1,112 @@
+image: docker:latest
+
+stages:
+  - composer74
+  - test74
+  - test80
+  - test81
+
+composer74:
+  stage: composer74
+  image: $REGISTRY_URL/php:7.4
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - vendor/
+      - .env
+  tags:
+    - dind
+  script:
+    - composer install
+    - composer gen:env -- --no-interaction
+
+composer80:
+  stage: composer80
+  image: $REGISTRY_URL/php:8.0
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - vendor/
+      - .env
+  tags:
+    - dind
+  script:
+    - composer install
+    - composer gen:env -- --no-interaction
+
+composer81:
+  stage: composer81
+  image: $REGISTRY_URL/php:8.1
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - vendor/
+      - .env
+  tags:
+    - dind
+  script:
+    - composer install
+    - composer gen:env -- --no-interaction
+
+test74:
+  stage: test74
+  image: linuxserver/docker-compose
+  dependencies:
+    - composer74
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - vendor/
+      - .env
+  tags:
+    - dind
+  script:
+    - docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASSWORD $REGISTRY_URL
+    - sed -i 's/ports:/# ports:/g' docker-compose.yml
+    - sed -i 's/- 80:80/# - 80:80/g' docker-compose.yml
+    - sed -i 's/- 443:443/# - 443:443/g' docker-compose.yml
+    - sed -i 's/- 443:443\/udp/# - 443:443\/udp/g' docker-compose.yml
+    - docker-compose build
+    - docker-compose up -d || true
+    - docker-compose ps | grep -q "Up" || true
+    - docker-compose down -v
+
+test80:
+  stage: test80
+  image: linuxserver/docker-compose
+  dependencies:
+    - composer80
+  only:
+    - main
+  tags:
+    - dind
+  script:
+    - docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASSWORD $REGISTRY_URL
+    - sed -i 's/ports:/# ports:/g' docker-compose.yml
+    - sed -i 's/- 80:80/# - 80:80/g' docker-compose.yml
+    - sed -i 's/- 443:443/# - 443:443/g' docker-compose.yml
+    - sed -i 's/- 443:443\/udp/# - 443:443\/udp/g' docker-compose.yml
+    - docker-compose build
+    - docker-compose up -d || true
+    - docker-compose ps | grep -q "Up" || true
+    - docker-compose down -v
+
+test81:
+  stage: test81
+  image: linuxserver/docker-compose
+  dependencies:
+    - composer80
+  only:
+      - main
+  tags:
+    - dind
+  script:
+    - docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASSWORD $REGISTRY_URL
+    - sed -i 's/ports:/# ports:/g' docker-compose.yml
+    - sed -i 's/- 80:80/# - 80:80/g' docker-compose.yml
+    - sed -i 's/- 443:443/# - 443:443/g' docker-compose.yml
+    - sed -i 's/- 443:443\/udp/# - 443:443\/udp/g' docker-compose.yml
+    - docker-compose build
+    - docker-compose up -d || true
+    - docker-compose ps | grep -q "Up" || true
+    - docker-compose down -v

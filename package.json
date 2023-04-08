@@ -1,0 +1,12 @@
+{
+  "name": "wordpress",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:boyer-nicolas/bedrock.git",
+  "author": "Nicolas Boyer <nicolas@niwee.fr>",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ACTIVE_THEME=$(docker compose exec wordpress bash -c 'wp --skip-plugins theme list --status=active --field=name') && cd web/app/themes/$ACTIVE_THEME && yarn dev",
+    "build": "ACTIVE_THEME=$(docker compose exec wordpress bash -c 'wp --skip-plugins theme list --status=active --field=name') && cd web/app/themes/$ACTIVE_THEME && yarn build"
+  }
+}

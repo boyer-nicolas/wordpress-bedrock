@@ -1,0 +1,128 @@
+#!/bin/bash
+set -e
+
+source /home/niwee/bin/utils.sh
+source /home/niwee/bin/ssh-config.sh
+
+if [ "$WP_ENV" = "development" ]; then
+    URL=$WP_DEV_URL
+elif [ "$WP_ENV" = "staging" ]; then
+    URL=$WP_STAGING_URL
+elif [ "$WP_ENV" = "production" ]; then
+    URL=$WP_PROD_URL
+fi
+
+# Cleanup
+if [ -d $BACKUP_DIR ]; then
+    await "Removing old backup ..."
+    if rm -r $BACKUP_DIR/$URL; then
+        ok
+    else
+        fail
+        exit 1
+    fi
+fi
+
+# Create backup folder if it doesn't exist
+await "Creating backup folder ..."
+if mkdir -p "$BACKUP_SQL_DIR" && mkdir -p $BACKUP_CONTENT_DIR; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Dump database
+await "Exporting database to $BACKUP_SQL_FILE ... "
+if mysqldump -u $MYSQL_USER -h $MYSQL_HOST -p$MYSQL_PASSWORD $MYSQL_DATABASE >$BACKUP_SQL_FILE; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Copy files
+await "Copying $WP_CONTENT_DIR to $BACKUP_CONTENT_DIR ... "
+if cp -r $WP_CONTENT_DIR/* $BACKUP_CONTENT_DIR/; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Compress backup
+await "Compressing files ... "
+cd $BACKUP_CONTENT_DIR
+if tar -czf wp.tar.gz .; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Compress backup
+await "Compressing database backup ... "
+cd $BACKUP_SQL_DIR
+if tar -czf sql.tar.gz .; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Create folder on remote
+await "Creating folder on remote ... "
+if ssh -p $SSH_PORT -i $SSH_IDENTITY_FILE $SSH_USER@$SSH_HOST "mkdir -p $REMOTE_BACKUP_DIR"; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Upload to Remote
+log "Uploading files backup to remote ... "
+if rsync -avz -e "ssh -p $SSH_PORT -i $SSH_IDENTITY_FILE" /tmp/wp.tar.gz $SSH_USER@$SSH_HOST:$REMOTE_BACKUP_DIR/wp.tar.gz; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Upload to remote
+log "Uploading sql backup to remote ... "
+if rsync -avz -e "ssh -p $SSH_PORT -i $SSH_IDENTITY_FILE" /tmp/sql.tar.gz $SSH_USER@$SSH_HOST:$REMOTE_BACKUP_DIR/sql.tar.gz; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Delete local backup
+await "Deleting local backup ... "
+if rm -r $BACKUP_DIR; then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Count backups on remote
+await "Counting backups on remote ... "
+if BACKUP_COUNT=$(ssh -p $SSH_PORT -i $SSH_IDENTITY_FILE $SSH_USER@$SSH_HOST "ls -1 $BASE_REMOTE_BACKUP_DIR/ | wc -l"); then
+    ok
+else
+    fail
+    exit 1
+fi
+
+# Only keep 10 backups
+if [ $BACKUP_COUNT -gt 15 ]; then
+    await "Removing old backups on remote ... "
+    BACKUPS_TO_DELETE=$(ssh -p $SSH_PORT -i $SSH_IDENTITY_FILE $SSH_USER@$SSH_HOST "ls -1 $BASE_REMOTE_BACKUP_DIR/ | head -n 1")
+    if ssh -p $SSH_PORT -i $SSH_IDENTITY_FILE $SSH_USER@$SSH_HOST "rm -r $BASE_REMOTE_BACKUP_DIR/$BACKUPS_TO_DELETE"; then
+        ok
+    else
+        fail
+        exit 1
+    fi
+fi

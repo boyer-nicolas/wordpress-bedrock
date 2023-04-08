@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+source bin/messages.sh
+
+bin/db.sh dump
+bin/media.sh push
+
+if [ -d "vendor" ]; then
+    info "Running test suite"
+    composer test
+fi

@@ -1,0 +1,44 @@
+image: docker:latest
+
+# INFO: PHP 8.0 and 8.1 are not supported by Wordpress without deprecation warnings, nonetheless the tests are ready to be used (but commented out).
+
+stages:
+  - push74
+  # - push80
+  # - push81
+
+push74:
+  stage: push74
+  only:
+    - main
+  tags:
+    - dind
+  script:
+    - docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASSWORD $REGISTRY_URL
+    - docker build -t $REGISTRY_URL/wordpress:7.4 .
+    - docker push $REGISTRY_URL/wordpress:7.4
+    - docker build -t $REGISTRY_URL/wordpress:latest .
+    - docker push $REGISTRY_URL/wordpress:latest
+    
+# push80:
+#   stage: push80
+#   only:
+#     - main
+#   tags:
+#     - dind
+#   script:
+#     - sed -i 's/7.4/8.0/g' Dockerfile
+#     - docker build -t $REGISTRY_URL/wordpress:8.0 .
+#     - docker push $REGISTRY_URL/wordpress:8.0
+
+# push81:
+#   stage: push81
+#   only:
+#     - main
+#   tags:
+#     - dind
+#   script:
+#     - docker login -u $REGISTRY_USERNAME -p $REGISTRY_PASSWORD $REGISTRY_URL
+#     - sed -i 's/7.4/8.1/g' Dockerfile
+#     - docker build -t $REGISTRY_URL/wordpress:8.1 .
+#     - docker push $REGISTRY_URL/wordpress:8.1

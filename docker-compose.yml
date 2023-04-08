@@ -1,0 +1,93 @@
+version: "3.9"
+services:
+  wordpress:
+    build: ./docker
+    restart: "unless-stopped"
+    healthcheck:
+      test: ["CMD", "wp", "core", "is-installed", "--allow-root"]
+      interval: 2s
+      timeout: 3s
+      retries: 50
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    working_dir: /var/www/html
+    env_file: 
+      - .env
+    volumes:
+      - home:/home/niwee
+      - ./:/home/niwee/app
+      - ./.git:/home/niwee/app/.git
+      - $HOME/.ssh:/home/niwee/.ssh
+      - $HOME/.gitconfig:/home/niwee/.gitconfig
+      - ./config/ssl:/home/niwee/ssl
+    tty: true
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    restart: "unless-stopped"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 2s
+      timeout: 3s
+      retries: 50
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    volumes:
+      - ./config/nginx:/etc/nginx/conf.d
+      - ./config/ssl:/etc/nginx/ssl
+      - ./:/var/www/html
+      - ./log:/var/log/nginx
+
+
+  mariadb:
+    image: mariadb:latest
+    restart: "unless-stopped"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "-p${MYSQL_ROOT_PASSWORD}", "ping", "--silent"]
+      interval: 2s
+      timeout: 3s
+      retries: 50
+    expose:
+      - 3306
+    env_file: 
+      - .env
+    volumes:
+      - "./sql:/docker-entrypoint-initdb.d"
+      - mariadb:/var/lib/mysql
+
+  redis:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    ulimits:
+      memlock: -1
+    expose:
+      - 6379
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 2s
+      timeout: 3s
+      retries: 50
+    volumes:
+      - redis:/data
+
+
+volumes:
+  mariadb:
+    driver: local
+  home:
+    driver: local
+  redis:
+    driver: local
+
+networks:
+  main:
+    external: false
+    name: ${NETWORK}

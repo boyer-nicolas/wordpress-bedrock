@@ -1,0 +1,46 @@
+version: "3.9"
+services:
+  nginx:
+    image: nginx:latest
+    restart: "unless-stopped"
+    depends_on:
+      wordpress:
+        condition: service_healthy
+    volumes:
+      - ./config/nginx:/etc/nginx/conf.d
+      - ./:/var/www/html
+      - ./log:/var/log/nginx
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.${NETWORK}.rule=Host(`${WP_PRODUCTION_URL}`)
+      - traefik.http.routers.${NETWORK}.entrypoints=websecure
+      - traefik.http.services.${NETWORK}.loadbalancer.server.port=80
+      - traefik.http.routers.${NETWORK}.tls.certresolver=cloudflare
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --cleanup --interval 300 --label-enable --label-prefix traefik --label-prefix com.centurylinklabs.watchtower --label-prefix com.github.containrrr.watch
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - $HOME/.niwee-docker-credentials:/config.json
+
+networks:
+  web:
+    external: true
+  main:
+    external: false
+    name: ${NETWORK}
+
+volumes:
+  home:
+    driver: local
+  redis:
+    driver: local
